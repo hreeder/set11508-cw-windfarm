@@ -170,6 +170,7 @@ public class Solver {
 
         for (int generation=0; generation<num_generations; generation++) {
             // add some code to evolve a solution
+            output("Generation " + (generation + 1) + " starting");
 
             for (int island_n=0; island_n<num_islands; island_n++) {
                 // Choose some parents
@@ -246,6 +247,7 @@ public class Solver {
                 }
             }
 
+            output("Generation " + (generation + 1) + " evaluation");
             // Evaluate at the end of the generation
             double best_global_fitness = evaluate();
 
@@ -340,7 +342,7 @@ public class Solver {
     private double evaluate() {
         double minfit = Double.MAX_VALUE;
 
-        ExecutorService executor = Executors.newFixedThreadPool(48);
+        ExecutorService executor = Executors.newFixedThreadPool(16);
         Future<Double>[][] tasks = new Future[num_islands][num_individuals_per_island];
 
         for (int island=0; island<num_islands; island++) {
