@@ -2,6 +2,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
@@ -24,7 +25,7 @@ public class Solver {
     Random rand;
     int num_islands;
     int num_individuals_per_island;
-    
+
     ArrayList<double[]> grid;
 
     int num_generations_to_migrate;
@@ -217,10 +218,10 @@ public class Solver {
         String[] initial_output = new String[num_islands + 3];
         initial_output[0] = Long.toString(now.getTime() - started_at.getTime());
         initial_output[1] = "0";
-        initial_output[2] = Double.toString(initial_fitness);
+        initial_output[2] = new BigDecimal(initial_fitness).toPlainString();
 
         for (int island=0; island<num_islands; island++)
-            initial_output[island+3] = Double.toString(get_best_from_island(island));
+            initial_output[island+3] = new BigDecimal(get_best_from_island(island)).toPlainString();
 
         write_csv_line(initial_output);
 
@@ -323,10 +324,10 @@ public class Solver {
             String[] generation_output = new String[num_islands + 3];
             generation_output[0] = Long.toString(now.getTime() - started_at.getTime());
             generation_output[1] = Integer.toString(generation + 1);
-            generation_output[2] = Double.toString(best_global_fitness);
+            generation_output[2] = new BigDecimal(best_global_fitness).toPlainString();
 
             for (int island=0; island<num_islands; island++)
-                generation_output[island+3] = Double.toString(get_best_from_island(island));
+                generation_output[island+3] = new BigDecimal(get_best_from_island(island)).toPlainString();
 
             write_csv_line(generation_output);
             output("Generation " + (generation + 1) + " complete");
@@ -491,7 +492,7 @@ public class Solver {
             e.printStackTrace();
         }
 
-        output("\tBest Fitness: " + minfit);
+        output("\tBest Fitness: " + new BigDecimal(minfit).toPlainString());
         return minfit;
     }
 }
