@@ -1,13 +1,24 @@
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Random;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Solver {
 
     static int CO_METHOD_RANDOM = 0;
     static int CO_METHOD_ONE_POINT = 1;
     static int CO_METHOD_TWO_POINT = 2;
+
+    static int MIG_STRATEGY_RANDOM = 0;
+    static int MIG_STRATEGY_BEST_N = 1;
 
     WindFarmLayoutEvaluator wfle;
     boolean[][][] individuals;
@@ -22,37 +33,46 @@ public class Solver {
     int num_individuals_to_migrate;
     int num_generations;
     int min_generation_for_migration;
+    int migration_strategy;
 
     int[] crossover_methods;
     int[] tournament_sizes;
+    double[] mutation_probability;
 
-    Date started_at = new Date();
+    Date started_at;
     Date now;
     long since_start;
 
+    String csv_filename;
+
     public Solver(WindFarmLayoutEvaluator evaluator) {
+        this(evaluator, 5, 10000, MIG_STRATEGY_RANDOM, 2);
+    }
+
+    public Solver(WindFarmLayoutEvaluator evaluator, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
+        started_at = new Date();
         wfle = evaluator;
         rand = new Random();
-        grid = new ArrayList<double[]>();
-        
+        grid = new ArrayList<>();
+
         // set up any parameter here, e.g pop size, cross_rate etc.
         num_islands = 3;
-        num_individuals_per_island = 10;  // change this to anything you want
+        num_individuals_per_island = 20;  // change this to anything you want
 
-        num_generations_to_migrate = 5;
-        num_individuals_to_migrate = 2;
-        num_generations = 10000;
+        this.num_generations_to_migrate = num_generations_to_migrate;
+        this.num_generations = num_generations;
         min_generation_for_migration = 10;
+        this.migration_strategy = migration_strategy;
+        this.num_individuals_to_migrate = num_to_migrate;
 
-        crossover_methods = new int[num_islands];
-        crossover_methods[0] = CO_METHOD_RANDOM;
-        crossover_methods[1] = CO_METHOD_ONE_POINT;
-        crossover_methods[2] = CO_METHOD_TWO_POINT;
+        crossover_methods = new int[]{ CO_METHOD_RANDOM, CO_METHOD_ONE_POINT, CO_METHOD_TWO_POINT };
+        tournament_sizes = new int[]{ 2, 2, 2 };
+        mutation_probability = new double[]{ 0.05, 0.05, 0.05 };
 
-        tournament_sizes = new int[num_islands];
-        tournament_sizes[0] = 2;
-        tournament_sizes[1] = 2;
-        tournament_sizes[2] = 2;
+        csv_filename = new SimpleDateFormat("yyyyMMdd-HHmmss").format(started_at);
+        List<String> parts = Stream.of("output", csv_filename).collect(Collectors.toList());
+        csv_filename = String.join("-", parts) + ".csv";
+        output("Will write to " + csv_filename);
     }
 
     private void output(String message) {
@@ -61,11 +81,34 @@ public class Solver {
         System.out.println("[" + since_start + "] " + message);
     }
     
-    
+    private void write_csv_line(String[] line) {
+        String line_to_write = String.join(",", line);
+        try {
+            PrintWriter pw = new PrintWriter(new FileOutputStream(
+                    new File(csv_filename),
+                    true
+            ));
+
+            pw.println(line_to_write);
+            pw.close();
+        } catch (FileNotFoundException ex) {
+            output(" --- ! --- Cannot open CSV file for output --- ! ---");
+            output(line_to_write);
+        }
+    }
    
     public void run_cw() {
         started_at = new Date();
         output("Starting");
+
+        String[] header_row = new String[num_islands + 2];
+        header_row[0] = "generation";
+        header_row[1] = "global_best";
+
+        for (int i=0; i < num_islands; i++)
+            header_row[i+2] = "island_" + i + "_best";
+
+        write_csv_line(header_row);
 
         /************set up grid for scenario chosen  ***************************/
         // do not change or remove this section of code
@@ -111,9 +154,18 @@ public class Solver {
        /****** evaluate initial population  *************************/
 
         // this populates the fit[] array with the fitness values for each solution
-        evaluate();
+        double initial_fitness = evaluate();
 
         output("Initial population evaluated");
+
+        String[] initial_output = new String[num_islands + 2];
+        initial_output[0] = "0";
+        initial_output[1] = Double.toString(initial_fitness);
+
+        for (int island=0; island<num_islands; island++)
+            initial_output[island+2] = Double.toString(get_best_from_island(island));
+
+        write_csv_line(initial_output);
 
         /**** PUT YOUR OPTIMISER CODE HERE ***********/
 
@@ -156,7 +208,10 @@ public class Solver {
                 }
 
                 // Mutation
-                // No mutation just now
+                for (int i=0; i<grid.size(); i++) {
+                    if (rand.nextDouble() < mutation_probability[island_n])
+                        child[i] = !child[i];
+                }
 
                 // Replacement
                 double worst_fitness = 0;
@@ -171,17 +226,39 @@ public class Solver {
                 double child_fitness = evaluate_individual(child);
                 // Only insert new child into population if it is better than the worst of the population
                 if (child_fitness < worst_fitness && worst_index != -1) {
+                    fits[island_n][worst_index] = child_fitness;
                     individuals[island_n][worst_index] = child;
                 }
             }
 
+            // Migration
             if (generation >= min_generation_for_migration && generation % num_generations_to_migrate == 0) {
-                output("Generation " + generation + " - Migrate");
+                output("Generation " + (generation + 1) + " - Migrate");
+                for (int island = 0; island < num_islands; island++) {
+                    int target_island = (island == num_islands - 1) ? 0 : island + 1;
+                    if (migration_strategy == MIG_STRATEGY_RANDOM) {
+                        int the_chosen_one = rand.nextInt(num_individuals_per_island);
+
+                        int destination = get_worst_index_from_island(target_island);
+                        individuals[target_island][destination] = individuals[island][the_chosen_one];
+                    } else if (migration_strategy == MIG_STRATEGY_BEST_N) {
+
+                    }
+                }
             }
 
             // Evaluate at the end of the generation
-            evaluate();
-            output("Generation " + generation + " complete");
+            double best_global_fitness = evaluate();
+
+            String[] generation_output = new String[num_islands + 2];
+            generation_output[0] = Integer.toString(generation + 1);
+            generation_output[1] = Double.toString(best_global_fitness);
+
+            for (int island=0; island<num_islands; island++)
+                generation_output[island+2] = Double.toString(get_best_from_island(island));
+
+            write_csv_line(generation_output);
+            output("Generation " + (generation + 1) + " complete");
         }
     }
 
@@ -202,6 +279,29 @@ public class Solver {
 
 
         return best_parent_index;
+    }
+
+    private int get_worst_index_from_island(int island) {
+        int worst_index_in_island = -1;
+        double worst_in_island = 0;
+
+        for (int i=0; i<num_individuals_per_island; i++) {
+            if (fits[island][i] > worst_in_island) {
+                worst_index_in_island = i;
+                worst_in_island = fits[island][i];
+            }
+        }
+
+        return worst_index_in_island;
+    }
+
+    private double get_best_from_island(int island) {
+        double best_in_island = Double.MAX_VALUE;
+        for (int i=0; i<num_individuals_per_island; i++)
+            if (fits[island][i] < best_in_island)
+                best_in_island = fits[island][i];
+
+        return best_in_island;
     }
     
     // evaluate a single chromosome
@@ -238,7 +338,7 @@ public class Solver {
     }
 
     // evaluates the whole population
-    private void evaluate() {
+    private double evaluate() {
         double minfit = Double.MAX_VALUE;
 
         for (int island=0; island<num_islands; island++) {
@@ -249,7 +349,7 @@ public class Solver {
                         nturbines++;
                     }
                 }
-    
+
                 double[][] layout = new double[nturbines][2];
                 int l_i = 0;
                 for (int i = 0; i < grid.size(); i++) {
@@ -259,7 +359,7 @@ public class Solver {
                         l_i++;
                     }
                 }
-    
+
                 double coe;
                 if (wfle.checkConstraint(layout)) {
                     wfle.evaluate(layout);
@@ -267,17 +367,15 @@ public class Solver {
                 } else {
                     coe = Double.MAX_VALUE;
                 }
-    
+
                 fits[island][p] = coe;
                 if (fits[island][p] < minfit) {
                     minfit = fits[island][p];
                 }
-    
+
             }
         }
         output("\tBest Fitness: " + minfit);
+        return minfit;
     }
-
-    
-    
 }
