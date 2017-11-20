@@ -33,9 +33,9 @@ public class Solver {
     int min_generation_for_migration;
     int migration_strategy;
 
-    int[] crossover_methods;
-    int[] tournament_sizes;
-    double[] mutation_probability;
+    Integer[] crossover_methods;
+    Integer[] tournament_sizes;
+    Double[] mutation_probability;
 
     Date started_at;
     Date now;
@@ -44,14 +44,13 @@ public class Solver {
     String csv_filename;
     String log_filename;
 
-    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename) {
-        this(evaluator, scenario_filename, 5, 10000, MIG_STRATEGY_RANDOM, 2);
-    }
+    SolverSettings settings;
 
-    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
+    public Solver(SolverSettings settings) {
         started_at = new Date();
-        wfle = evaluator;
-        this.scenario_filename = scenario_filename;
+        this.settings = settings;
+        wfle = settings.getEvaluator();
+        this.scenario_filename = settings.getScenario_filename();
         rand = new Random();
         grid = new ArrayList<>();
 
@@ -59,15 +58,15 @@ public class Solver {
         num_islands = 3;
         num_individuals_per_island = 20;  // change this to anything you want
 
-        this.num_generations_to_migrate = num_generations_to_migrate;
-        this.num_generations = num_generations;
-        min_generation_for_migration = 10;
-        this.migration_strategy = migration_strategy;
-        this.num_individuals_to_migrate = num_to_migrate;
+        this.num_generations_to_migrate = settings.getNum_generations_to_migrate();
+        this.num_generations = settings.getMax_generations();
+        min_generation_for_migration = settings.getMin_generation_for_migration();
+        this.migration_strategy = settings.getMigration_strategy();
+        this.num_individuals_to_migrate = settings.getNum_to_migrate();
 
-        crossover_methods = new int[]{ CO_METHOD_RANDOM, CO_METHOD_ONE_POINT, CO_METHOD_TWO_POINT };
-        tournament_sizes = new int[]{ 2, 2, 2 };
-        mutation_probability = new double[]{ 0.05, 0.05, 0.05 };
+        crossover_methods = settings.getCrossover_methods();
+        tournament_sizes = settings.getTournament_sizes();
+        mutation_probability = settings.getMutation_probability();
 
         csv_filename = new SimpleDateFormat("yyyyMMdd-HHmmss").format(started_at);
         List<String> parts = Stream.of("output", csv_filename).collect(Collectors.toList());
@@ -85,15 +84,35 @@ public class Solver {
         output("\tMigration Strategy: " + migration_strategy);
         output("\tNumber of Individuals to Migrate (if applicable): " + num_individuals_to_migrate);
         output("\tCrossover Methods: " + Arrays.stream(crossover_methods)
-                .mapToObj(String::valueOf)
+                .map(String::valueOf)
                 .collect(Collectors.joining(",")));
         output("\tTournament Sizes: " + Arrays.stream(tournament_sizes)
-                .mapToObj(String::valueOf)
+                .map(String::valueOf)
                 .collect(Collectors.joining(",")));
         output("\tMutation Probabilities: " + Arrays.stream(mutation_probability)
-                .mapToObj(String::valueOf)
+                .map(String::valueOf)
                 .collect(Collectors.joining(",")));
         output("// END SETTINGS");
+    }
+
+    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename) {
+        this(evaluator, scenario_filename, 5, 10000, MIG_STRATEGY_RANDOM, 2);
+    }
+
+    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
+        this(new SolverSettings(
+                evaluator,
+                scenario_filename,
+                8,
+                num_generations,
+                num_generations_to_migrate,
+                migration_strategy,
+                num_to_migrate,
+                10,
+                new Integer[]{ CO_METHOD_RANDOM, CO_METHOD_ONE_POINT, CO_METHOD_TWO_POINT },
+                new Integer[]{ 2, 2, 2 },
+                new Double[]{ 0.05, 0.05, 0.05 }
+        ));
     }
 
     private void output(String message) {
@@ -310,6 +329,11 @@ public class Solver {
 
             write_csv_line(generation_output);
             output("Generation " + (generation + 1) + " complete");
+
+            if ((now.getTime() - started_at.getTime()) > settings.getMax_hours_to_run() * 60 * 60 * 1000) {
+                output("Breaking - Overrun time parameter");
+                break;
+            }
         }
     }
 
@@ -392,7 +416,7 @@ public class Solver {
     private double evaluate() {
         double minfit = Double.MAX_VALUE;
 
-        ExecutorService executor = Executors.newFixedThreadPool(16);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
         Future<Double>[][] tasks = new Future[num_islands][num_individuals_per_island];
 
         for (int island=0; island<num_islands; island++) {
