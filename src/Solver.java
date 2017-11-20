@@ -4,10 +4,7 @@ import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -21,6 +18,7 @@ public class Solver {
     static int MIG_STRATEGY_BEST_N = 1;
 
     WindFarmLayoutEvaluator wfle;
+    int num_scenario;
     boolean[][][] individuals;
     double[][] fits;
     Random rand;
@@ -45,13 +43,14 @@ public class Solver {
 
     String csv_filename;
 
-    public Solver(WindFarmLayoutEvaluator evaluator) {
-        this(evaluator, 5, 10000, MIG_STRATEGY_RANDOM, 2);
+    public Solver(WindFarmLayoutEvaluator evaluator, int num_scenario) {
+        this(evaluator, num_scenario, 5, 10000, MIG_STRATEGY_RANDOM, 2);
     }
 
-    public Solver(WindFarmLayoutEvaluator evaluator, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
+    public Solver(WindFarmLayoutEvaluator evaluator, int num_scenario, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
         started_at = new Date();
         wfle = evaluator;
+        this.num_scenario = num_scenario;
         rand = new Random();
         grid = new ArrayList<>();
 
@@ -341,6 +340,9 @@ public class Solver {
     private double evaluate() {
         double minfit = Double.MAX_VALUE;
 
+        ExecutorService executor = Executors.newFixedThreadPool(48);
+        Future<Double>[][] tasks = new Future[num_islands][num_individuals_per_island];
+
         for (int island=0; island<num_islands; island++) {
             for (int p = 0; p < num_individuals_per_island; p++) {
                 int nturbines = 0;
@@ -360,21 +362,66 @@ public class Solver {
                     }
                 }
 
-                double coe;
-                if (wfle.checkConstraint(layout)) {
-                    wfle.evaluate(layout);
-                    coe = wfle.getEnergyCost();
-                } else {
-                    coe = Double.MAX_VALUE;
-                }
+                final double[][] layout_final = layout;
+                final int nSc = this.num_scenario;
 
-                fits[island][p] = coe;
-                if (fits[island][p] < minfit) {
-                    minfit = fits[island][p];
-                }
+                Callable<Double> task = () -> {
+                    String threadName = Thread.currentThread().getName();
+//                    output("Hello from thread " + threadName);
+
+                    // As the provided evaluator is not thread safe
+                    // we create an instance of it local to this thread
+                    KusiakLayoutEvaluator localWfle = new KusiakLayoutEvaluator();
+                    WindScenario sc = new WindScenario("./Scenarios/practice_"+nSc+".xml");
+                    localWfle.initialize(sc);
+
+                    double coe;
+                    if (localWfle.checkConstraint(layout_final)) {
+                        localWfle.evaluate(layout_final);
+                        coe = localWfle.getEnergyCost();
+                    } else {
+                        coe = Double.MAX_VALUE;
+                    }
+                    return coe;
+                };
+
+//                output("Saving " + island + "-" + p);
+                tasks[island][p] = executor.submit(task);
+
+//                fits[island][p] = coe;
+//                if (fits[island][p] < minfit) {
+//                    minfit = fits[island][p];
+//                }
 
             }
         }
+
+        try {
+            // to check we're finished, get the final value first
+            // This call blocks until it is done.
+//            output("Going to get the final one (" + (num_islands-1) + "-" + (num_individuals_per_island-1) + ")");
+            tasks[num_islands - 1][num_individuals_per_island - 1].get();
+//            output("Got the final one");
+
+            // Now that's done, we can set our fits like we had been doing before
+            for (int island=0; island<num_islands; island++) {
+                for (int individual=0; individual<num_individuals_per_island; individual++) {
+//                    output("Fitting " + island + "-" + individual);
+                    Double result = tasks[island][individual].get();
+
+                    fits[island][individual] = result;
+
+                    if (result < minfit) {
+                        minfit = result;
+                    }
+                }
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
         output("\tBest Fitness: " + minfit);
         return minfit;
     }
