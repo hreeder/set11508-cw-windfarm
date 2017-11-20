@@ -42,6 +42,7 @@ public class Solver {
     long since_start;
 
     String csv_filename;
+    String log_filename;
 
     public Solver(WindFarmLayoutEvaluator evaluator, int num_scenario) {
         this(evaluator, num_scenario, 5, 10000, MIG_STRATEGY_RANDOM, 2);
@@ -71,13 +72,45 @@ public class Solver {
         csv_filename = new SimpleDateFormat("yyyyMMdd-HHmmss").format(started_at);
         List<String> parts = Stream.of("output", csv_filename).collect(Collectors.toList());
         csv_filename = String.join("-", parts) + ".csv";
-        output("Will write to " + csv_filename);
+        log_filename = String.join("-", parts) + ".log";
+        output("Will write to " + csv_filename + ", and " + log_filename);
+
+        output("This is using the following settings:");
+        output("\tNumber of Islands: " + num_islands);
+        output("\tNumber of Individual per Island: " + num_individuals_per_island);
+        output("\tNumber of Generations to Migrate: " + num_generations_to_migrate);
+        output("\tNumber of Generations: " + num_generations);
+        output("\tMigration Strategy: " + migration_strategy);
+        output("\tNumber of Individuals to Migrate (if applicable): " + num_individuals_to_migrate);
+        output("\tCrossover Methods: " + Arrays.stream(crossover_methods)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining(",")));
+        output("\tTournament Sizes: " + Arrays.stream(tournament_sizes)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining(",")));
+        output("\tMutation Probabilities: " + Arrays.stream(mutation_probability)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining(",")));
+        output("// END SETTINGS");
     }
 
     private void output(String message) {
         now = new Date();
         since_start = now.getTime() - started_at.getTime();
-        System.out.println("[" + since_start + "] " + message);
+        String line = "[" + since_start + "] " + message;
+        System.out.println(line);
+
+        try {
+            PrintWriter pw = new PrintWriter(new FileOutputStream(
+                    new File(log_filename),
+                    true
+            ));
+
+            pw.println(line);
+            pw.close();
+        } catch (FileNotFoundException ex) {
+            System.out.println("Could not write line to log file - " + line);
+        }
     }
     
     private void write_csv_line(String[] line) {
@@ -98,7 +131,7 @@ public class Solver {
    
     public void run_cw() {
         started_at = new Date();
-        output("Starting");
+        output("Begin Run_CW");
 
         String[] header_row = new String[num_islands + 3];
         header_row[0] = "ms since start";
