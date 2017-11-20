@@ -18,7 +18,7 @@ public class Solver {
     static int MIG_STRATEGY_BEST_N = 1;
 
     WindFarmLayoutEvaluator wfle;
-    int num_scenario;
+    String scenario_filename;
     boolean[][][] individuals;
     double[][] fits;
     Random rand;
@@ -44,14 +44,14 @@ public class Solver {
     String csv_filename;
     String log_filename;
 
-    public Solver(WindFarmLayoutEvaluator evaluator, int num_scenario) {
-        this(evaluator, num_scenario, 5, 10000, MIG_STRATEGY_RANDOM, 2);
+    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename) {
+        this(evaluator, scenario_filename, 5, 10000, MIG_STRATEGY_RANDOM, 2);
     }
 
-    public Solver(WindFarmLayoutEvaluator evaluator, int num_scenario, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
+    public Solver(WindFarmLayoutEvaluator evaluator, String scenario_filename, int num_generations_to_migrate, int num_generations, int migration_strategy, int num_to_migrate) {
         started_at = new Date();
         wfle = evaluator;
-        this.num_scenario = num_scenario;
+        this.scenario_filename = scenario_filename;
         rand = new Random();
         grid = new ArrayList<>();
 
@@ -71,11 +71,13 @@ public class Solver {
 
         csv_filename = new SimpleDateFormat("yyyyMMdd-HHmmss").format(started_at);
         List<String> parts = Stream.of("output", csv_filename).collect(Collectors.toList());
-        csv_filename = String.join("-", parts) + ".csv";
-        log_filename = String.join("-", parts) + ".log";
-        output("Will write to " + csv_filename + ", and " + log_filename);
+        String filename = String.join("-", parts);
+        csv_filename = filename + ".csv";
+        log_filename = filename + ".log";
+        output("Will write to " + filename + ".[csv|log]");
 
         output("This is using the following settings:");
+        output("\tScenario: " + scenario_filename);
         output("\tNumber of Islands: " + num_islands);
         output("\tNumber of Individual per Island: " + num_individuals_per_island);
         output("\tNumber of Generations to Migrate: " + num_generations_to_migrate);
@@ -413,7 +415,7 @@ public class Solver {
                 }
 
                 final double[][] layout_final = layout;
-                final int nSc = this.num_scenario;
+                final String scenario = scenario_filename;
 
                 Callable<Double> task = () -> {
                     String threadName = Thread.currentThread().getName();
@@ -422,7 +424,7 @@ public class Solver {
                     // As the provided evaluator is not thread safe
                     // we create an instance of it local to this thread
                     KusiakLayoutEvaluator localWfle = new KusiakLayoutEvaluator();
-                    WindScenario sc = new WindScenario("./Scenarios/practice_"+nSc+".xml");
+                    WindScenario sc = new WindScenario(scenario_filename);
                     localWfle.initialize(sc);
 
                     double coe;
