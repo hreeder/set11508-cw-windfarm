@@ -173,9 +173,12 @@ public class Solver {
             output("Generation " + (generation + 1) + " starting");
 
             for (int island_n=0; island_n<num_islands; island_n++) {
+                output("\tIsland: " + island_n);
                 // Choose some parents
                 boolean[] left_parent = individuals[island_n][select_parent(island_n)];
+                output("\tGot Left Parent");
                 boolean[] right_parent = individuals[island_n][select_parent(island_n)];
+                output("\tGot Right Parent");
 
                 // Crossover
                 boolean[] child = new boolean[grid.size()];
@@ -207,11 +210,15 @@ public class Solver {
                     }
                 }
 
+                output("\tChild Created");
+
                 // Mutation
                 for (int i=0; i<grid.size(); i++) {
                     if (rand.nextDouble() < mutation_probability[island_n])
                         child[i] = !child[i];
                 }
+
+                output("\tMutation Complete");
 
                 // Replacement
                 double worst_fitness = 0;
@@ -222,6 +229,7 @@ public class Solver {
                         worst_index = i;
                     }
                 }
+                output("\tReplacement Target: " + worst_index);
 
                 double child_fitness = evaluate_individual(child);
                 // Only insert new child into population if it is better than the worst of the population
@@ -229,6 +237,8 @@ public class Solver {
                     fits[island_n][worst_index] = child_fitness;
                     individuals[island_n][worst_index] = child;
                 }
+
+                output("\tReplaced");
             }
 
             // Migration
@@ -270,7 +280,7 @@ public class Solver {
         // run a basic tournament
         for (int i=0; i<tournament_sizes[island_n]; i++) {
             int this_parent_index = rand.nextInt(num_individuals_per_island);
-            double this_parent_fitness = evaluate_individual(individuals[island_n][this_parent_index]);
+            double this_parent_fitness = fits[island_n][this_parent_index];
 
             if (this_parent_fitness < best_parent_fitness) {
                 best_parent_index = this_parent_index;
