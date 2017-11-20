@@ -100,12 +100,13 @@ public class Solver {
         started_at = new Date();
         output("Starting");
 
-        String[] header_row = new String[num_islands + 2];
-        header_row[0] = "generation";
-        header_row[1] = "global_best";
+        String[] header_row = new String[num_islands + 3];
+        header_row[0] = "ms since start";
+        header_row[1] = "generation";
+        header_row[2] = "global best";
 
         for (int i=0; i < num_islands; i++)
-            header_row[i+2] = "island_" + i + "_best";
+            header_row[i+3] = "island " + i + " best";
 
         write_csv_line(header_row);
 
@@ -157,12 +158,14 @@ public class Solver {
 
         output("Initial population evaluated");
 
-        String[] initial_output = new String[num_islands + 2];
-        initial_output[0] = "0";
-        initial_output[1] = Double.toString(initial_fitness);
+        now = new Date();
+        String[] initial_output = new String[num_islands + 3];
+        initial_output[0] = Long.toString(now.getTime() - started_at.getTime());
+        initial_output[1] = "0";
+        initial_output[2] = Double.toString(initial_fitness);
 
         for (int island=0; island<num_islands; island++)
-            initial_output[island+2] = Double.toString(get_best_from_island(island));
+            initial_output[island+3] = Double.toString(get_best_from_island(island));
 
         write_csv_line(initial_output);
 
@@ -261,12 +264,14 @@ public class Solver {
             // Evaluate at the end of the generation
             double best_global_fitness = evaluate();
 
-            String[] generation_output = new String[num_islands + 2];
-            generation_output[0] = Integer.toString(generation + 1);
-            generation_output[1] = Double.toString(best_global_fitness);
+            now = new Date();
+            String[] generation_output = new String[num_islands + 3];
+            generation_output[0] = Long.toString(now.getTime() - started_at.getTime());
+            generation_output[1] = Integer.toString(generation + 1);
+            generation_output[2] = Double.toString(best_global_fitness);
 
             for (int island=0; island<num_islands; island++)
-                generation_output[island+2] = Double.toString(get_best_from_island(island));
+                generation_output[island+3] = Double.toString(get_best_from_island(island));
 
             write_csv_line(generation_output);
             output("Generation " + (generation + 1) + " complete");
