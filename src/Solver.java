@@ -397,32 +397,27 @@ public class Solver {
 
         for (int island=0; island<num_islands; island++) {
             for (int p = 0; p < num_individuals_per_island; p++) {
-                output("\tEvaluation - Begin " + island + "-" + p);
-                int nturbines = 0;
-                for (int i = 0; i < grid.size(); i++) {
-                    if (individuals[island][p][i]) {
-                        nturbines++;
-                    }
-                }
-
-                output("\tEvaluation - layout");
-                double[][] layout = new double[nturbines][2];
-                int l_i = 0;
-                for (int i = 0; i < grid.size(); i++) {
-                    if (individuals[island][p][i]) {
-                        layout[l_i][0] = grid.get(i)[0];
-                        layout[l_i][1] = grid.get(i)[1];
-                        l_i++;
-                    }
-                }
-
-                final double[][] layout_final = layout;
+                final int fIsland = island;
+                final int fP = p;
                 final String scenario = scenario_filename;
 
-                output("\tEvaluation - Creating Task");
                 Callable<Double> task = () -> {
-                    String threadName = Thread.currentThread().getName();
-//                    output("Hello from thread " + threadName);
+                    int nturbines = 0;
+                    for (int i = 0; i < grid.size(); i++) {
+                        if (individuals[fIsland][fP][i]) {
+                            nturbines++;
+                        }
+                    }
+
+                    double[][] layout = new double[nturbines][2];
+                    int l_i = 0;
+                    for (int i = 0; i < grid.size(); i++) {
+                        if (individuals[fIsland][fP][i]) {
+                            layout[l_i][0] = grid.get(i)[0];
+                            layout[l_i][1] = grid.get(i)[1];
+                            l_i++;
+                        }
+                    }
 
                     // As the provided evaluator is not thread safe
                     // we create an instance of it local to this thread
@@ -431,8 +426,8 @@ public class Solver {
                     localWfle.initialize(sc);
 
                     double coe;
-                    if (localWfle.checkConstraint(layout_final)) {
-                        localWfle.evaluate(layout_final);
+                    if (localWfle.checkConstraint(layout)) {
+                        localWfle.evaluate(layout);
                         coe = localWfle.getEnergyCost();
                     } else {
                         coe = Double.MAX_VALUE;
@@ -441,9 +436,7 @@ public class Solver {
                 };
 
 //                output("Saving " + island + "-" + p);
-                output("\tEvaluation - Created Task");
                 tasks[island][p] = executor.submit(task);
-                output("\tEvaluation - Submitted Task");
 
 //                fits[island][p] = coe;
 //                if (fits[island][p] < minfit) {
@@ -457,7 +450,7 @@ public class Solver {
             // Now that's done, we can set our fits like we had been doing before
             for (int island=0; island<num_islands; island++) {
                 for (int individual=0; individual<num_individuals_per_island; individual++) {
-                    output("Fitting " + island + "-" + individual);
+//                    output("Fitting " + island + "-" + individual);
                     Double result = tasks[island][individual].get();
 
                     fits[island][individual] = result;
