@@ -11,6 +11,7 @@ fun main(args : Array<String>) {
             evaluator = practice_wfle,
             max_hours_to_run = 1
     ))
+    practice_solver.run_cw()
 
     files.forEach { filename ->
         var wfle = KusiakLayoutEvaluator()

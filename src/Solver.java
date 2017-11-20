@@ -92,6 +92,7 @@ public class Solver {
         output("\tMutation Probabilities: " + Arrays.stream(mutation_probability)
                 .map(String::valueOf)
                 .collect(Collectors.joining(",")));
+        output(this.settings.toString());
         output("// END SETTINGS");
     }
 
